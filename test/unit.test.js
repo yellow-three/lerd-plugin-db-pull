@@ -28,6 +28,8 @@ test('addRemote refuses what would become an ssh option or a bad path', () => {
   assert.throws(add({ ssh: 'h', port: '70000' }), /not a port/);
   assert.throws(add({ ssh: 'h', database: "x'; drop" }), /database name/);
   assert.throws(() => config.addRemote(empty(), 'Staging!', { ssh: 'h', path: '/a' }), /server name/);
+  assert.throws(add({ ssh: 'h', identity: '/no/such/test-ke' }), /no readable key file at \/no\/such\/test-ke/);
+  assert.equal(config.addRemote(empty(), 'staging', { ssh: 'h', path: '/a', identity: __filename }).remotes.staging.identity, __filename);
 });
 
 test('pickRemote takes the named server, else the default', () => {
