@@ -1,0 +1,7 @@
+{
+  "name": "lerd-plugin-db-pull",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}

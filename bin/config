@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+// /api/plugins/db-pull/config: GET reads the site's settings, POST changes one.
+const { jsonInput, run } = require('../lib/args');
+const config = require('../lib/config');
+
+const actions = {
+  'add-remote': (cfg, b) => config.addRemote(cfg, b.name, b),
+  'remove-remote': (cfg, b) => config.removeRemote(cfg, b.name),
+  'set-default': (cfg, b) => config.setDefault(cfg, b.name),
+  mask: (cfg, b) => config.setMask(cfg, b.column, b.rule || null),
+  skip: (cfg, b) => config.setSkip(cfg, [b.table], b.on !== false),
+};
+
+run(async () => {
+  const site = process.env.LERD_SITE;
+  if (!site) throw new Error('Pass ?site=<name>');
+  let cfg = config.load(site);
+  if (process.env.LERD_METHOD === 'POST') {
+    const body = jsonInput();
+    const fn = actions[body.action];
+    if (!fn) throw new Error(`Unknown action ${body.action}`);
+    cfg = fn(cfg, body);
+    config.save(site, cfg);
+  }
+  console.log(JSON.stringify({ site, rules: config.RULES, ...cfg }));
+});

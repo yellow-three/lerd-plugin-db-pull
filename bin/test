@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+// lerd db-pull:test [name], and the dashboard's Test button.
+const { parseArgs, jsonInput, run } = require('../lib/args');
+const { test, mb } = require('../lib/pull');
+
+run(async () => {
+  const input = jsonInput();
+  const o = input || parseArgs(process.argv.slice(2));
+  const site = process.env.LERD_SITE || o.site;
+  if (!site) throw new Error('Run this inside a linked project, or pass --site <name>');
+  const r = await test({ site, remote: input ? o.remote : o._[0] });
+  if (input) return console.log(JSON.stringify(r));
+  console.log(`${r.remote}: ${r.engine} database ${r.database}${r.size ? `, about ${mb(r.size)}` : ''}${r.tables ? `, ${r.tables} tables` : ''}`);
+  if (r.dumper) console.log(`  dumped with ${r.dumper}`);
+});

@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+// lerd db-pull:remove <name>
+const { parseArgs, run } = require('../lib/args');
+const config = require('../lib/config');
+
+run(async () => {
+  const o = parseArgs(process.argv.slice(2));
+  const site = o.site || process.env.LERD_SITE;
+  if (!site || !o._[0]) throw new Error('usage: lerd db-pull:remove <name>, inside a linked project');
+  config.save(site, config.removeRemote(config.load(site), o._[0]));
+  console.log(`Forgot ${o._[0]} for ${site}`);
+});

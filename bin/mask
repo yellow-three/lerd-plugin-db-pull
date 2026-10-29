@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+// lerd db-pull:mask <table.column> <rule> | <table.column> --off
+const { parseArgs, run } = require('../lib/args');
+const config = require('../lib/config');
+
+run(async () => {
+  const o = parseArgs(process.argv.slice(2), ['off']);
+  const site = o.site || process.env.LERD_SITE;
+  const [column, rule] = o._;
+  if (!site || !column || (!rule && !o.off)) {
+    throw new Error(`usage: lerd db-pull:mask <table.column> <${config.RULES.join('|')}|set:<value>>, or lerd db-pull:mask <table.column> --off`);
+  }
+  config.save(site, config.setMask(config.load(site), column, o.off ? null : rule));
+  console.log(o.off ? `${column} is no longer masked` : `${column} is masked as ${rule} on every pull`);
+});

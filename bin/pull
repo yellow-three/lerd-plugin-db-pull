@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+// lerd db-pull:pull [name] [--site] [--no-mask]; the site command, the
+// db-pull_pull tool and the dashboard's Pull button.
+const { parseArgs, jsonInput, run } = require('../lib/args');
+const { pull } = require('../lib/pull');
+
+run(async () => {
+  const input = jsonInput();
+  const o = input || parseArgs(process.argv.slice(2), ['no-mask']);
+  const site = process.env.LERD_SITE || o.site;
+  const result = await pull({
+    site,
+    branch: process.env.LERD_BRANCH,
+    remote: input ? o.remote : o._[0],
+    // The masking rules are the user's; an assistant cannot pull around them.
+    noMask: !input && !!o['no-mask'],
+  });
+  if (input) console.log(JSON.stringify(result));
+});

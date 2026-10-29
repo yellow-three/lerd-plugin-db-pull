@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+// lerd db-pull:remotes, and the db-pull_remotes tool.
+const { parseArgs, jsonInput, run } = require('../lib/args');
+const config = require('../lib/config');
+
+run(async () => {
+  const input = jsonInput();
+  const o = input || parseArgs(process.argv.slice(2));
+  const site = process.env.LERD_SITE || o.site;
+  if (!site) throw new Error('Run this inside a linked project, or pass --site <name>');
+  const cfg = config.load(site);
+  if (input) return console.log(JSON.stringify({ site, ...cfg }, null, 2));
+
+  const names = Object.keys(cfg.remotes);
+  if (!names.length) return console.log(`No server saved for ${site}. Add one with: lerd db-pull:add staging forge@1.2.3.4 /home/forge/${site}`);
+  console.log(`Servers for ${site}:`);
+  for (const n of names) {
+    const r = cfg.remotes[n];
+    const extra = [r.port !== 22 && `port ${r.port}`, r.env !== '.env' && `env ${r.env}`, r.database && `database ${r.database}`, r.identity && `key ${r.identity}`].filter(Boolean);
+    console.log(`  ${n === cfg.default ? '*' : ' '} ${n.padEnd(12)} ${r.ssh}:${r.path}${extra.length ? `  (${extra.join(', ')})` : ''}`);
+  }
+  const mask = Object.entries(cfg.mask);
+  console.log(mask.length ? `Masked on every pull:\n${mask.map(([c, r]) => `    ${c} -> ${r}`).join('\n')}` : 'Nothing is masked. Add a rule with: lerd db-pull:mask users.email email');
+  if (cfg.skip.length) console.log(`Pulled without rows: ${cfg.skip.join(', ')}`);
+  if (cfg.last) console.log(`Last pull: ${cfg.last.remote}, ${new Date(cfg.last.at).toLocaleString()}`);
+});

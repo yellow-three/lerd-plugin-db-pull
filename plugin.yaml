@@ -1,0 +1,82 @@
+api_version: 1
+name: db-pull
+lerd: ">=1.38"
+version: 0.1.0
+description: Pull a site's database from a staging or production server over SSH, with personal data masked on the way in
+docs: DOCS.md
+icon: icon.svg
+
+# lerd db-pull:add | remotes | remove | test | pull | mask | skip
+commands:
+  - name: add
+    usage: "Save a server this site's database can be pulled from: add <name> <user@host> <app path> [--port 22] [--identity <key>] [--env .env] [--database <name>] [--default]"
+    run: bin/add
+  - name: remotes
+    usage: The servers saved for this site, with its masking rules and skipped tables
+    run: bin/remotes
+  - name: remove
+    usage: "Forget a saved server: remove <name>"
+    run: bin/remove
+  - name: test
+    usage: "Connect to a server and show the database it would pull, without pulling: test [name]"
+    run: bin/test
+  - name: pull
+    usage: "Replace this site's lerd database with the server's, after a snapshot: pull [name] [--site <site>] [--no-mask]"
+    run: bin/pull
+  - name: mask
+    usage: "Mask a column on every pull: mask <table.column> <email|name|hash|null|empty|password|set:<value>>, or mask <table.column> --off"
+    run: bin/mask
+  - name: skip
+    usage: "Pull a table's structure without its rows: skip <table...>, or skip <table...> --off"
+    run: bin/skip
+
+site_commands:
+  - name: pull
+    label: Pull database from server
+    description: Replace this site's lerd database with the one on its default server, after a snapshot, masking the columns set up for it
+    confirm: true
+    run: bin/pull
+    timeout: 1h
+
+mcp:
+  skill: SKILL.md
+  tools:
+    - name: remotes
+      description: List the servers a lerd site's database can be pulled from, with the columns masked and tables skipped on every pull
+      input_schema:
+        type: object
+        required: [site]
+        properties:
+          site: {type: string, description: lerd site name}
+      run: bin/remotes
+    - name: pull
+      description: Replace a lerd site's database with the one on a saved server, over SSH. Snapshots the lerd database first as before-db-pull and masks the configured columns
+      input_schema:
+        type: object
+        required: [site]
+        properties:
+          site: {type: string, description: lerd site name}
+          remote: {type: string, description: Saved server name, the site's default when omitted}
+      run: bin/pull
+      timeout: 10m
+
+api:
+  - path: config
+    methods: [GET, POST]
+    run: bin/config
+    loopback_only: true
+  - path: test
+    methods: [POST]
+    run: bin/test
+    loopback_only: true
+    timeout: 1m
+  - path: pull
+    methods: [POST]
+    run: bin/pull
+    loopback_only: true
+    timeout: 10m
+
+requires: [ssh]
+
+ui:
+  site_tab: {title: DB Pull, entry: ui/site.html}

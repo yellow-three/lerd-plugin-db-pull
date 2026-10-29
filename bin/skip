@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// lerd db-pull:skip <table...> [--off]
+const { parseArgs, run } = require('../lib/args');
+const config = require('../lib/config');
+
+run(async () => {
+  const o = parseArgs(process.argv.slice(2), ['off']);
+  const site = o.site || process.env.LERD_SITE;
+  if (!site || !o._.length) throw new Error('usage: lerd db-pull:skip <table...> [--off], inside a linked project');
+  const cfg = config.setSkip(config.load(site), o._, !o.off);
+  config.save(site, cfg);
+  console.log(cfg.skip.length ? `Pulled without rows: ${cfg.skip.join(', ')}` : 'Every table is pulled with its rows');
+});

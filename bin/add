@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+// lerd db-pull:add <name> <user@host> <app path> [--port] [--identity] [--env] [--database] [--default]
+const { parseArgs, run } = require('../lib/args');
+const config = require('../lib/config');
+
+run(async () => {
+  const o = parseArgs(process.argv.slice(2), ['default']);
+  const site = o.site || process.env.LERD_SITE;
+  if (!site) throw new Error('Run this inside a linked project, or pass --site <name>');
+  const [name, ssh, path] = o._;
+  if (!path) throw new Error('usage: lerd db-pull:add <name> <user@host> <app path> [--port 22] [--identity <key>] [--env .env] [--database <name>] [--default]');
+  const cfg = config.addRemote(config.load(site), name, { ssh, path, port: o.port, identity: o.identity, env: o.env, database: o.database, default: o.default });
+  config.save(site, cfg);
+  console.log(`Saved ${name} for ${site}${cfg.default === name ? ' as its default' : ''}. Try it with: lerd db-pull:test ${name}`);
+});

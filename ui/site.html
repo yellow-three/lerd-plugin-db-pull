@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DB Pull</title>
+  <style>
+    body { padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+    .grid label { display: flex; flex-direction: column; gap: 4px; }
+    .inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .inline input { min-width: 0; }
+    td.actions { text-align: right; white-space: nowrap; }
+    #out { white-space: pre-wrap; margin: 0; max-height: 320px; overflow: auto; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <section class="lerd-section">
+    <div class="lerd-toolbar">
+      <span class="lerd-label">Servers</span>
+      <span class="spacer"></span>
+      <span id="last" class="lerd-muted"></span>
+    </div>
+    <div class="lerd-card flush table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>SSH</th><th>App path</th><th></th></tr></thead>
+        <tbody id="remotes"></tbody>
+      </table>
+      <div id="no-remotes" class="lerd-empty" hidden><strong>No server yet</strong>Add the staging or production server this site's database comes from.</div>
+    </div>
+  </section>
+
+  <section class="lerd-section">
+    <span class="lerd-label">Add a server</span>
+    <form id="add" class="lerd-card">
+      <div class="grid">
+        <label>Name <input name="name" placeholder="staging" required></label>
+        <label>SSH <input name="ssh" placeholder="forge@203.0.113.10" required></label>
+        <label>App path <input name="path" placeholder="/home/forge/shop.com" required></label>
+        <label>Port <input name="port" type="number" min="1" max="65535" placeholder="22"></label>
+        <label>Env file <input name="env" placeholder=".env"></label>
+        <label>Database <input name="database" placeholder="from the env file"></label>
+        <label>SSH key <input name="identity" placeholder="ssh-agent"></label>
+      </div>
+      <div class="lerd-toolbar">
+        <label class="inline"><input type="checkbox" name="default"> Make it the default</label>
+        <span class="spacer"></span>
+        <button class="primary" type="submit">Save server</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="lerd-section">
+    <span class="lerd-label">Masked on every pull</span>
+    <div class="lerd-card flush table-wrap">
+      <table>
+        <thead><tr><th>Column</th><th>Becomes</th><th></th></tr></thead>
+        <tbody id="mask"></tbody>
+      </table>
+    </div>
+    <form id="add-mask" class="inline lerd-section">
+      <input name="column" placeholder="users.email" required>
+      <select name="rule" id="rules"></select>
+      <input name="value" placeholder="value" hidden>
+      <button type="submit">Add rule</button>
+    </form>
+  </section>
+
+  <section class="lerd-section">
+    <span class="lerd-label">Pulled without rows</span>
+    <div id="skip" class="inline lerd-section"></div>
+    <form id="add-skip" class="inline">
+      <input name="table" placeholder="sessions" required>
+      <button type="submit">Skip rows</button>
+    </form>
+  </section>
+
+  <section class="lerd-section" id="out-wrap" hidden>
+    <span class="lerd-label">Output</span>
+    <pre id="out" class="lerd-card lerd-mono"></pre>
+  </section>
+
+  <dialog id="confirm">
+    <p><strong id="confirm-title"></strong></p>
+    <p class="lerd-muted">The site's lerd database is replaced by the server's. A <span class="lerd-mono">before-db-pull</span> snapshot is taken first, so <span class="lerd-mono">lerd db:restore before-db-pull</span> brings it back. Big databases are better pulled from the terminal with <span class="lerd-mono">lerd db-pull:pull</span>, since the dashboard stops after 10 minutes.</p>
+    <div class="lerd-toolbar">
+      <span class="spacer"></span>
+      <button id="confirm-no" type="button">Cancel</button>
+      <button id="confirm-yes" class="primary" type="button">Pull</button>
+    </div>
+  </dialog>
+
+  <script src="lerd.js"></script>
+  <script>
+    const site = lerd.context.site;
+    const $ = (id) => document.getElementById(id);
+    const q = 'site=' + encodeURIComponent(site);
+    const RULE_HELP = { email: 'hash@example.test', name: 'User + hash', hash: '16-char hash', null: 'NULL', empty: 'empty text', password: 'bcrypt of "password"' };
+    let busy = false;
+
+    function el(tag, props = {}, ...children) {
+      const e = Object.assign(document.createElement(tag), props);
+      for (const c of children) e.append(c);
+      return e;
+    }
+
+    function show(text) {
+      $('out-wrap').hidden = false;
+      $('out').textContent = text;
+    }
+
+    async function call(path, body) {
+      const text = await lerd.api(path + '?' + q, body === undefined ? {} : { method: 'POST', body });
+      try { return JSON.parse(text); } catch { return text; }
+    }
+
+    async function change(body) {
+      try {
+        render(await call('config', body));
+        return true;
+      } catch (e) {
+        show(e.message);
+        return false;
+      }
+    }
+
+    function button(label, fn, cls = '') {
+      return el('button', { type: 'button', className: cls, textContent: label, onclick: fn });
+    }
+
+    function render(cfg) {
+      const names = Object.keys(cfg.remotes);
+      $('no-remotes').hidden = names.length > 0;
+      $('remotes').replaceChildren(...names.map((n) => {
+        const r = cfg.remotes[n];
+        const name = el('td', {}, n);
+        if (n === cfg.default) name.append(' ', el('span', { className: 'lerd-pill accent', textContent: 'default' }));
+        const ssh = r.ssh + (r.port && r.port !== 22 ? ':' + r.port : '');
+        return el('tr', {},
+          name,
+          el('td', { className: 'lerd-mono' }, ssh),
+          el('td', { className: 'lerd-mono' }, r.path),
+          el('td', { className: 'actions' },
+            button('Test', () => test(n)),
+            ' ', button('Pull', () => ask(n), 'primary'),
+            ...(n === cfg.default ? [] : [' ', button('Make default', () => change({ action: 'set-default', name: n }))]),
+            ' ', button('Remove', () => change({ action: 'remove-remote', name: n }), 'danger')));
+      }));
+
+      const rules = Object.entries(cfg.mask);
+      $('mask').replaceChildren(...(rules.length ? rules.map(([c, r]) => el('tr', {},
+        el('td', { className: 'lerd-mono' }, c),
+        el('td', {}, r.startsWith('set:') ? el('span', { className: 'lerd-mono' }, r.slice(4)) : r + ' ', r.startsWith('set:') ? '' : el('span', { className: 'lerd-muted', textContent: RULE_HELP[r] || '' })),
+        el('td', { className: 'actions' }, button('Remove', () => change({ action: 'mask', column: c, rule: null }))))) :
+        [el('tr', {}, el('td', { colSpan: 3, className: 'lerd-muted', textContent: 'Nothing is masked: the pulled data arrives as it is on the server.' }))]));
+
+      if (!$('rules').options.length) {
+        $('rules').replaceChildren(...cfg.rules.map((r) => el('option', { value: r, textContent: `${r} (${RULE_HELP[r]})` })), el('option', { value: 'set', textContent: 'a fixed value' }));
+      }
+
+      $('skip').replaceChildren(...(cfg.skip.length ? cfg.skip.map((t) => el('span', { className: 'lerd-pill' }, t + ' ',
+        el('a', { href: '#', textContent: '×', title: 'Pull its rows again', onclick: (e) => { e.preventDefault(); change({ action: 'skip', table: t, on: false }); } }))) :
+        [el('span', { className: 'lerd-muted', textContent: 'Every table comes with its rows.' })]));
+
+      $('last').textContent = cfg.last ? `Last pull: ${cfg.last.remote}, ${new Date(cfg.last.at).toLocaleString(lerd.context.lang)}` : '';
+    }
+
+    async function test(name) {
+      if (busy) return;
+      busy = true;
+      show(`Connecting to ${name}...`);
+      try {
+        const r = await call('test', { remote: name });
+        const size = r.size ? `, about ${(r.size / 1048576).toFixed(1)} MB` : '';
+        show(`${r.remote}: ${r.engine} database ${r.database}${size}${r.tables ? `, ${r.tables} tables` : ''}\n${r.dumper}`);
+      } catch (e) { show(e.message); }
+      busy = false;
+    }
+
+    function ask(name) {
+      $('confirm-title').textContent = `Replace ${site}${lerd.context.branch ? ' (' + lerd.context.branch + ')' : ''}'s database with ${name}'s?`;
+      $('confirm-yes').onclick = () => { $('confirm').close(); pull(name); };
+      $('confirm').showModal();
+    }
+    $('confirm-no').onclick = () => $('confirm').close();
+
+    async function pull(name) {
+      if (busy) return;
+      busy = true;
+      show(`Pulling from ${name}. This can take a while...`);
+      try {
+        const r = await call('pull', { remote: name });
+        show(`${r.database} in lerd's ${r.service} now holds ${name}'s data${r.masked.length ? ', with ' + r.masked.join(', ') + ' masked' : ''}.\nlerd db:restore ${r.snapshot} brings the old data back.`);
+        render(await call('config'));
+      } catch (e) { show(e.message); }
+      busy = false;
+    }
+
+    $('add').onsubmit = (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const body = { action: 'add-remote', default: f.get('default') === 'on' };
+      for (const k of ['name', 'ssh', 'path', 'port', 'env', 'database', 'identity']) if (f.get(k)) body[k] = f.get(k);
+      change(body).then((ok) => ok && e.target.reset());
+    };
+
+    const maskForm = $('add-mask');
+    maskForm.rule.onchange = () => { maskForm.value.hidden = maskForm.rule.value !== 'set'; };
+    maskForm.onsubmit = (e) => {
+      e.preventDefault();
+      const rule = maskForm.rule.value === 'set' ? 'set:' + maskForm.value.value : maskForm.rule.value;
+      change({ action: 'mask', column: maskForm.column.value.trim(), rule });
+      maskForm.column.value = '';
+    };
+
+    $('add-skip').onsubmit = (e) => {
+      e.preventDefault();
+      change({ action: 'skip', table: e.target.table.value.trim(), on: true });
+      e.target.table.value = '';
+    };
+
+    call('config').then(render).catch((e) => show(e.message));
+  </script>
+</body>
+</html>
