@@ -5,6 +5,7 @@ version: 0.1.0
 description: Pull a site's database from a staging or production server over SSH, with personal data masked on the way in
 docs: DOCS.md
 icon: icon.svg
+screenshots: [docs/tab.png, docs/tab-dark.png]
 
 # lerd db-pull:add | remotes | remove | test | pull | mask | skip
 commands:

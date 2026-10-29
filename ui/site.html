@@ -12,6 +12,7 @@
     td.actions { text-align: right; white-space: nowrap; }
     #out { white-space: pre-wrap; margin: 0; max-height: 320px; overflow: auto; }
     .table-wrap { overflow-x: auto; }
+    .below { margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -28,6 +29,11 @@
       </table>
       <div id="no-remotes" class="lerd-empty" hidden><strong>No server yet</strong>Add the staging or production server this site's database comes from.</div>
     </div>
+  </section>
+
+  <section class="lerd-section" id="out-wrap" hidden>
+    <span class="lerd-label">Output</span>
+    <pre id="out" class="lerd-card lerd-mono"></pre>
   </section>
 
   <section class="lerd-section">
@@ -58,27 +64,28 @@
         <tbody id="mask"></tbody>
       </table>
     </div>
-    <form id="add-mask" class="inline lerd-section">
+    <form id="add-mask" class="inline below">
       <input name="column" placeholder="users.email" required>
       <select name="rule" id="rules"></select>
       <input name="value" placeholder="value" hidden>
-      <button type="submit">Add rule</button>
+      <button type="button" onclick="this.form.requestSubmit()">Add rule</button>
     </form>
   </section>
 
   <section class="lerd-section">
     <span class="lerd-label">Pulled without rows</span>
-    <div id="skip" class="inline lerd-section"></div>
-    <form id="add-skip" class="inline">
+    <div class="lerd-card flush table-wrap">
+      <table>
+        <thead><tr><th>Table</th><th></th></tr></thead>
+        <tbody id="skip"></tbody>
+      </table>
+    </div>
+    <form id="add-skip" class="inline below">
       <input name="table" placeholder="sessions" required>
-      <button type="submit">Skip rows</button>
+      <button type="button" onclick="this.form.requestSubmit()">Skip rows</button>
     </form>
   </section>
 
-  <section class="lerd-section" id="out-wrap" hidden>
-    <span class="lerd-label">Output</span>
-    <pre id="out" class="lerd-card lerd-mono"></pre>
-  </section>
 
   <dialog id="confirm">
     <p><strong id="confirm-title"></strong></p>
@@ -142,7 +149,7 @@
           el('td', { className: 'lerd-mono' }, r.path),
           el('td', { className: 'actions' },
             button('Test', () => test(n)),
-            ' ', button('Pull', () => ask(n), 'primary'),
+            ' ', button('Pull', () => ask(n)),
             ...(n === cfg.default ? [] : [' ', button('Make default', () => change({ action: 'set-default', name: n }))]),
             ' ', button('Remove', () => change({ action: 'remove-remote', name: n }), 'danger')));
       }));
@@ -158,9 +165,10 @@
         $('rules').replaceChildren(...cfg.rules.map((r) => el('option', { value: r, textContent: `${r} (${RULE_HELP[r]})` })), el('option', { value: 'set', textContent: 'a fixed value' }));
       }
 
-      $('skip').replaceChildren(...(cfg.skip.length ? cfg.skip.map((t) => el('span', { className: 'lerd-pill' }, t + ' ',
-        el('a', { href: '#', textContent: '×', title: 'Pull its rows again', onclick: (e) => { e.preventDefault(); change({ action: 'skip', table: t, on: false }); } }))) :
-        [el('span', { className: 'lerd-muted', textContent: 'Every table comes with its rows.' })]));
+      $('skip').replaceChildren(...(cfg.skip.length ? cfg.skip.map((t) => el('tr', {},
+        el('td', { className: 'lerd-mono' }, t),
+        el('td', { className: 'actions' }, button('Pull its rows', () => change({ action: 'skip', table: t, on: false }))))) :
+        [el('tr', {}, el('td', { colSpan: 2, className: 'lerd-muted', textContent: 'Every table comes with its rows.' }))]));
 
       $('last').textContent = cfg.last ? `Last pull: ${cfg.last.remote}, ${new Date(cfg.last.at).toLocaleString(lerd.context.lang)}` : '';
     }
